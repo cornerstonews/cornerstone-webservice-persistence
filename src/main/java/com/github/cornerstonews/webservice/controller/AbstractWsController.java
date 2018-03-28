@@ -16,17 +16,14 @@
  */
 package com.github.cornerstonews.webservice.controller;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Objects;
 
-import javax.validation.ConstraintViolation;
-import javax.validation.ConstraintViolationException;
+import javax.validation.ValidationException;
 
-import com.github.cornerstonews.webservice.exception.JsonConstraintViolation;
+import com.github.cornerstonews.persistence.jpa.controller.JpaController;
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
 import com.github.cornerstonews.webservice.exception.PreExistingEntityException;
-import com.github.cornerstonews.persistence.jpa.controller.JpaController;
 
 public abstract class AbstractWsController<T, E> implements WsController<T> {
 
@@ -64,12 +61,7 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     
     @Override
     public int post(T object) throws Exception {
-        List<E> entities = findPreExistingEntity(object);
-
-        if (entities != null && !entities.isEmpty()) {
-            throw new PreExistingEntityException("Entity already exists.");
-        }
-
+    	validatePreExisting(object, "Entity already exists.");
         E entity = convertToEntity(object);
         getJpaController().create(entity);
         return (int) getJpaController().getPrimaryKey(entity);
@@ -77,41 +69,54 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
 
     @Override
     public T get(Object id) throws Exception {
-        E entity = getJpaController().findByPrimaryKey(id);
-        if (entity == null) {
-            throw new NonExistingEntityException(NON_EXISTING_ENTITY_ERROR + id);
-        }
-
+        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
         return convertToDO(entity, true);
     }
 
     @Override
     public void put(Object id, T object) throws Exception {
-        E entity = getJpaController().findByPrimaryKey(id);
-        if (entity == null) {
-            throw new NonExistingEntityException(NON_EXISTING_ENTITY_ERROR + id);
-        }
-        
-        Object primaryKey = getJpaController().getPrimaryKey(convertToEntity(object));
-        
-        if(!getJpaController().convertToPrimaryKeyType(id).equals(primaryKey)) {
-            Set<ConstraintViolation<T>> constraints = new HashSet<>();
-            constraints.add(new JsonConstraintViolation<T>(object, 
-                    "Missing Primary Key field in provided json object or it does not match your URI '" + id + "'", "", String.valueOf(id)));
-            throw new ConstraintViolationException(constraints);
-        }
-        
+    	E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+    	String error = "Missing Primary Key field in provided json object or it does not match your URI '" + id + "'";
+    	validateIdMismatch(getJpaController().convertToPrimaryKeyType(id), getJpaController().getPrimaryKey(entity), error);
         entity = convertToEntity(object, entity);
         getJpaController().update(entity);
     }
 
     @Override
     public void delete(Object id) throws Exception {
-        E entity = getJpaController().findByPrimaryKey(id);
-        if (entity == null) {
-            throw new NonExistingEntityException(NON_EXISTING_ENTITY_ERROR + id);
-        }
-
+        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
         getJpaController().delete(entity);
     }
+    
+    public E validateNonExisting(Object id, String error) throws NonExistingEntityException {
+    	E entity = getJpaController().findByPrimaryKey(id);
+        if (entity == null) {
+            throw new NonExistingEntityException(error);
+        }
+        return entity;
+    }
+    
+    public void validatePreExisting(T object, String error) throws PreExistingEntityException {
+        List<E> entities = findPreExistingEntity(object);
+
+        if (entities != null && !entities.isEmpty()) {
+            throw new PreExistingEntityException(error);
+        }
+    }
+    
+    public Integer validateNumericPathId(Object id, String error) {
+        try {
+            return (int) getJpaController().convertToPrimaryKeyType(id);
+        }
+        catch (NumberFormatException ex) {
+            throw new ValidationException(error);
+        }
+    }
+    
+    public void validateIdMismatch(Object id, Object id2, String error) {
+        if (!Objects.equals(id, id2)) {
+            throw new ValidationException(error);
+        }	
+    }
+    
 }
