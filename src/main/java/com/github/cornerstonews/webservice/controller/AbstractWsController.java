@@ -16,14 +16,13 @@
  */
 package com.github.cornerstonews.webservice.controller;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import javax.validation.ValidationException;
 
 import com.github.cornerstonews.persistence.jpa.controller.JpaController;
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
-import com.github.cornerstonews.webservice.exception.PreExistingEntityException;
 
 public abstract class AbstractWsController<T, E> implements WsController<T> {
 
@@ -37,10 +36,10 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     /*
      * Finds and returns entity based on given DO object.
      * 
-     *  Find entity based on unique properties.
+     *  Find entity based on unique properties. Given entity must be excluded from matching.
      *  For example:  use jpaController to call findBy() using meta model fields like Persona_.username and value to search
      */
-    protected abstract List<E> findPreExistingEntity(T object);
+    protected abstract Map<String, Object> findUniqueFieldViolations(T object, E entity);
 
     /*
      * Convert given Entity object to DO object.
@@ -61,7 +60,7 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     
     @Override
     public int post(T object) throws Exception {
-    	validatePreExisting(object, "Entity already exists.");
+    	validateUniqueFields(object, null, "The following values are not available and must be changed");
         E entity = convertToEntity(object);
         getJpaController().create(entity);
         return (int) getJpaController().getPrimaryKey(entity);
@@ -78,6 +77,7 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     	E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
     	String error = "Missing Primary Key field in provided json object or it does not match your URI '" + id + "'";
     	validateIdMismatch(getJpaController().convertToPrimaryKeyType(id), getJpaController().getPrimaryKey(entity), error);
+    	validateUniqueFields(object, entity, "The following values are not available and must be changed");
         entity = convertToEntity(object, entity);
         getJpaController().update(entity);
     }
@@ -96,12 +96,18 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
         return entity;
     }
     
-    public void validatePreExisting(T object, String error) throws PreExistingEntityException {
-        List<E> entities = findPreExistingEntity(object);
-
-        if (entities != null && !entities.isEmpty()) {
-            throw new PreExistingEntityException(error);
-        }
+    public void validateUniqueFields(T object, E entity, String error) {
+    	Map<String, Object> duplicates = findUniqueFieldViolations(object, entity);
+    	
+    	if(!duplicates.isEmpty()) {
+    		StringBuilder sb = new StringBuilder(error);
+    		
+    		duplicates.forEach((field, value) -> {
+    			sb.append("\n").append(field).append(": ").append(value.toString());
+    		});
+    		
+    		throw new ValidationException(sb.toString());
+    	}
     }
     
     public Integer validateNumericPathId(Object id, String error) {
