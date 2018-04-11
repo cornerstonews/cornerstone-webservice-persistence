@@ -16,12 +16,13 @@
  */
 package com.github.cornerstonews.webservice.controller;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import javax.validation.ValidationException;
-
 import com.github.cornerstonews.persistence.jpa.controller.JpaController;
+import com.github.cornerstonews.webservice.exception.InputValidationException;
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
 
 public abstract class AbstractWsController<T, E> implements WsController<T> {
@@ -34,7 +35,7 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     protected abstract JpaController<E> getJpaController();
 
     /*
-     * Finds and returns entity based on given DO object.
+     * Finds unique field violations in db for given DO object.
      * 
      *  Find entity based on unique properties. Given entity must be excluded from matching.
      *  For example:  use jpaController to call findBy() using meta model fields like Persona_.username and value to search
@@ -58,9 +59,10 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
      */
     protected abstract E convertToEntity(T object, E entity);
     
+
     @Override
     public int post(T object) throws Exception {
-    	validateUniqueFields(object, null, "The following values are not available and must be changed");
+    	validateUniqueFields(object, null, "The following values are not available and must be changed. ");
         E entity = convertToEntity(object);
         getJpaController().create(entity);
         return (int) getJpaController().getPrimaryKey(entity);
@@ -74,10 +76,9 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
 
     @Override
     public void put(Object id, T object) throws Exception {
-    	E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
-    	String error = "Missing Primary Key field in provided json object or it does not match your URI '" + id + "'";
-    	validateIdMismatch(getJpaController().convertToPrimaryKeyType(id), getJpaController().getPrimaryKey(entity), error);
-    	validateUniqueFields(object, entity, "The following values are not available and must be changed");
+        validateIdMismatch(id, object, "Missing id field in provided json object or it does not match your URI '" + id + "'");
+        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+    	validateUniqueFields(object, entity, "The following values are not available and must be changed. ");
         entity = convertToEntity(object, entity);
         getJpaController().update(entity);
     }
@@ -99,29 +100,22 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     public void validateUniqueFields(T object, E entity, String error) {
     	Map<String, Object> duplicates = findUniqueFieldViolations(object, entity);
     	
-    	if(!duplicates.isEmpty()) {
-    		StringBuilder sb = new StringBuilder(error);
-    		
+    	if(duplicates != null && !duplicates.isEmpty()) {
+    	    List<String> errors = new ArrayList<>();
     		duplicates.forEach((field, value) -> {
-    			sb.append("\n").append(field).append(": ").append(value.toString());
+    			errors.add(field + ": " + value.toString());
     		});
     		
-    		throw new ValidationException(sb.toString());
+    		String errorMsg = error + " " + String.join(",", errors);
+    		throw new InputValidationException(errorMsg);
     	}
     }
     
-    public Integer validateNumericPathId(Object id, String error) {
-        try {
-            return (int) getJpaController().convertToPrimaryKeyType(id);
-        }
-        catch (NumberFormatException ex) {
-            throw new ValidationException(error);
-        }
-    }
-    
-    public void validateIdMismatch(Object id, Object id2, String error) {
-        if (!Objects.equals(id, id2)) {
-            throw new ValidationException(error);
+    public void validateIdMismatch(Object id, T object, String error) {
+        Object id1 = getJpaController().convertToPrimaryKeyType(id);
+        Object id2 = getJpaController().getPrimaryKey(convertToEntity(object));
+        if (!Objects.equals(id1, id2)) {
+            throw new InputValidationException(error);
         }	
     }
     
