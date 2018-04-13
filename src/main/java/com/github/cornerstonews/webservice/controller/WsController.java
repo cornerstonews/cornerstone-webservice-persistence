@@ -18,7 +18,7 @@ package com.github.cornerstonews.webservice.controller;
 
 public interface WsController<T> {
 
-    public int post(T entity) throws Exception;
+    public Object post(T entity) throws Exception;
     public T get(Object id) throws Exception;
     public void put(Object id, T entity) throws Exception;
     public void delete(Object id) throws Exception;

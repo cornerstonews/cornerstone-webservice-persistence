@@ -48,8 +48,12 @@ public abstract class AbstractResource<T, E extends WsController<T>> extends Abs
 
     @POST
     public Response post(@Valid T object) throws Exception {
-        int id = getController().post(object);
-        URI location = UriBuilder.fromUri(uri.getBaseUri()).path(this.getUriPath()).path(Integer.toString(id)).build();
+        Object id = getController().post(object);
+        
+        if (id instanceof Integer) {
+            id = Integer.toString((int) id);
+        }
+        URI location = UriBuilder.fromUri(uri.getBaseUri()).path(this.getUriPath()).path((String) id).build();
         return Response.created(location).build();
     }
 

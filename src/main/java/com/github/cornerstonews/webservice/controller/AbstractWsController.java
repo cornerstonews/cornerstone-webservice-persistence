@@ -61,11 +61,11 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     
 
     @Override
-    public int post(T object) throws Exception {
+    public Object post(T object) throws Exception {
     	validateUniqueFields(object, null, "The following values are not available and must be changed. ");
         E entity = convertToEntity(object);
         getJpaController().create(entity);
-        return (int) getJpaController().getPrimaryKey(entity);
+        return getJpaController().getPrimaryKey(entity);
     }
 
     @Override
