@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import javax.persistence.EntityNotFoundException;
+
 import com.github.cornerstonews.persistence.jpa.controller.JpaController;
 import com.github.cornerstonews.webservice.exception.InputValidationException;
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
@@ -87,6 +89,15 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     public void delete(Object id) throws Exception {
         E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
         getJpaController().delete(entity);
+    }
+    
+    public boolean isExistingEntity(Object id) {
+        try {
+            getJpaController().getReference(id);
+            return true;
+        } catch (EntityNotFoundException e) {
+            return false;
+        }
     }
     
     public E validateNonExisting(Object id, String error) throws NonExistingEntityException {
