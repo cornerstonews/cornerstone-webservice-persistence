@@ -23,12 +23,17 @@ import java.util.Objects;
 
 import javax.persistence.EntityNotFoundException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.github.cornerstonews.persistence.jpa.controller.JpaController;
 import com.github.cornerstonews.webservice.exception.InputValidationException;
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
 
 public abstract class AbstractWsController<T, E> implements WsController<T> {
 
+    private static final Logger log = LogManager.getLogger(AbstractWsController.class);
+                    
     private static final String NON_EXISTING_ENTITY_ERROR = "Could not find Entity with id: ";
     
     /*
@@ -61,38 +66,60 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
      */
     protected abstract E convertToEntity(T object, E entity);
     
+    private String getSimpleClassName(Object object) {
+        String className = object.getClass().getSimpleName();
+        return className.replaceAll("(?i)DO$", "");
+    }
 
     @Override
     public Object post(T object) throws Exception {
+        String className = this.getSimpleClassName(object);
+        log.info("Creating a new entry for {}", className);
+        log.trace("Creating with input -> '{}'", object);
     	validateUniqueFields(object, null, "The following values are not available and must be changed. ");
         E entity = convertToEntity(object);
         getJpaController().create(entity);
-        return getJpaController().getPrimaryKey(entity);
+        Object id = getJpaController().getPrimaryKey(entity);
+        log.info("Successfully created {} id: '{}'", className, id);
+        log.trace("Created {} -> '{}'", className, entity);
+        return id;
     }
 
     @Override
     public T get(Object id) throws Exception {
-        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
-        return convertToDO(entity, true);
+        E entity = validateExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+        T object = convertToDO(entity, true);
+        log.info("Getting {} object with id '{}'", this.getSimpleClassName(object), id);
+        log.trace("Found {} -> {}", this.getSimpleClassName(object), object);
+        return object;
     }
 
     @Override
     public void put(Object id, T object) throws Exception {
-        validateIdMismatch(id, object, "Missing id field in provided json object or it does not match your URI '" + id + "'");
-        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+        String className = this.getSimpleClassName(object);
+        log.info("Updating {} id: '{}'", className, id);
+        log.trace("Updating with input -> '{}'", object);
+        validateIdMatch(id, object, "Missing id field in provided json object or it does not match your URI '" + id + "'");
+        E entity = validateExisting(id, NON_EXISTING_ENTITY_ERROR + id);
     	validateUniqueFields(object, entity, "The following values are not available and must be changed. ");
         entity = convertToEntity(object, entity);
         getJpaController().update(entity);
+        log.info("Successfully updated {} id: '{}'", className, id);
+        log.trace("Updated message -> '{}'", entity);
     }
 
     @Override
     public void delete(Object id) throws Exception {
-        E entity = validateNonExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+        E entity = validateExisting(id, NON_EXISTING_ENTITY_ERROR + id);
+        String className = this.getSimpleClassName(entity);
+        log.info("Removing {} id: '{}'", className, id);
+        log.trace("Removing {} -> {}", className, entity);
         getJpaController().delete(entity);
     }
     
     public boolean isExistingEntity(Object id) {
         try {
+            log.debug("Checking if entity exists in DB with id: '{}'", id);
             getJpaController().getReference(id);
             return true;
         } catch (EntityNotFoundException e) {
@@ -100,7 +127,8 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
         }
     }
     
-    public E validateNonExisting(Object id, String error) throws NonExistingEntityException {
+    public E validateExisting(Object id, String error) throws NonExistingEntityException {
+        log.debug("Validating entity exists in DB with id: '{}'", id);
     	E entity = getJpaController().findByPrimaryKey(id);
         if (entity == null) {
             throw new NonExistingEntityException(error);
@@ -109,6 +137,9 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     }
     
     public void validateUniqueFields(T object, E entity, String error) {
+        String className = this.getSimpleClassName(object);
+        log.debug("Validating unique fields for {}", className);
+        log.trace("Validating unique fields of {} with {}", object, entity);
     	Map<String, Object> duplicates = findUniqueFieldViolations(object, entity);
     	
     	if(duplicates != null && !duplicates.isEmpty()) {
@@ -122,9 +153,10 @@ public abstract class AbstractWsController<T, E> implements WsController<T> {
     	}
     }
     
-    public void validateIdMismatch(Object id, T object, String error) {
+    public void validateIdMatch(Object id, T object, String error) {
         Object id1 = getJpaController().convertToPrimaryKeyType(id);
         Object id2 = getJpaController().getPrimaryKey(convertToEntity(object));
+        log.debug("Validating id: '{}' matches the given object's id: '{}'", id1, id2);
         if (!Objects.equals(id1, id2)) {
             throw new InputValidationException(error);
         }	
