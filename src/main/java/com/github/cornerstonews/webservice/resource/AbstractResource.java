@@ -20,6 +20,7 @@ import java.net.URI;
 
 import javax.validation.Valid;
 import javax.ws.rs.DELETE;
+//import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -30,11 +31,12 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.github.cornerstonews.webservice.controller.WsController;
+//import com.github.cornerstonews.webservice.util.WSResponse;
 
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
-public abstract class AbstractResource<T, E extends WsController<T>> extends AbstractReadOnlyResource<T, E> {
+public abstract class AbstractResource<T, E extends WsController<T>> {
 
     @Context
     protected Request request;
@@ -46,6 +48,12 @@ public abstract class AbstractResource<T, E extends WsController<T>> extends Abs
 
     protected abstract E getController();
 
+//    @GET
+//    @Path("{id: [a-zA-Z0-9]+}")
+//    public Response get(@PathParam("id") String id) throws Exception {
+//        return WSResponse.response(request, getController().get(id), Status.OK);
+//    }
+    
     @POST
     public Response post(@Valid T object) throws Exception {
         Object id = getController().post(object);
@@ -58,14 +66,14 @@ public abstract class AbstractResource<T, E extends WsController<T>> extends Abs
     }
 
     @PUT
-    @Path("{id: [a-zA-Z0-9]*}")
+    @Path("{id: [a-zA-Z0-9]+}")
     public Response put(@PathParam("id") String id, @Valid T object) throws Exception {
         getController().put(id, object);
         return Response.noContent().build();
     }
 
     @DELETE
-    @Path("{id: [a-zA-Z0-9]*}")
+    @Path("{id: [a-zA-Z0-9]+}")
     public Response delete(@PathParam("id") String id) throws Exception {
         getController().delete(id);
         return Response.status(Status.NO_CONTENT).build();
