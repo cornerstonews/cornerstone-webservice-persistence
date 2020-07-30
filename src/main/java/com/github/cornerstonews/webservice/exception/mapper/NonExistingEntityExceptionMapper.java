@@ -22,7 +22,6 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.ext.Provider;
 
 import com.github.cornerstonews.webservice.exception.NonExistingEntityException;
-import com.github.cornerstonews.webservice.exception.mapper.AbstractExceptionMapper;
 
 @Provider
 public class NonExistingEntityExceptionMapper extends AbstractExceptionMapper<NonExistingEntityException> {
